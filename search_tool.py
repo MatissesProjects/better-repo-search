@@ -472,7 +472,17 @@ def run_chat(prompt: str, model_name: str):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("prompt")
-    parser.add_argument("--model", default="qwen3.5:9b")
+    parser.add_argument("prompt", help="The prompt to send to the model.")
+    parser.add_argument("--model", default="qwen3.5:9b", help="The Ollama model to use.")
+    parser.add_argument("--repo", default=".", help="The path to the repository to search (default: current directory).")
     args = parser.parse_args()
+    
+    if args.repo != ".":
+        if os.path.exists(args.repo):
+            print(f"--- Changing working directory to: {args.repo} ---")
+            os.chdir(args.repo)
+        else:
+            print(f"Error: Repo path '{args.repo}' does not exist.")
+            sys.exit(1)
+            
     run_chat(args.prompt, args.model)
