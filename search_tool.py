@@ -169,42 +169,36 @@ def run_chat(prompt: str, model: str):
     
     max_turns = 10
     for turn in range(max_turns):
-        print(f"\n[Turn {turn+1}] Generating...", flush=True)
+        print(f"\n[Turn {turn+1}] Generating (this can take 30-60s on complex tasks)...", flush=True)
         
-        stream = ollama.chat(model=model, messages=messages, tools=tools, stream=True)
-        
-        full_message = {'role': 'assistant', 'content': '', 'thinking': '', 'tool_calls': []}
-        
-        for chunk in stream:
-            msg = chunk.get('message', {})
+        try:
+            # NON-STREAMING for tool turns is more stable in many Ollama configurations
+            response = ollama.chat(
+                model=model, 
+                messages=messages, 
+                tools=tools, 
+                options={
+                    'num_predict': 4096, 
+                    'temperature': 0,
+                    'num_ctx': 8192
+                }
+            )
             
-            if 'thinking' in msg and msg['thinking']:
-                print(msg['thinking'], end="", flush=True)
-                full_message['thinking'] += msg['thinking']
+            full_msg = response['message']
+            messages.append(full_msg)
             
-            if 'content' in msg and msg['content']:
-                print(msg['content'], end="", flush=True)
-                full_message['content'] += msg['content']
+            if full_msg.get('thinking'):
+                print(f"\n[Thinking]: {full_msg['thinking']}")
+            
+            if full_msg.get('content'):
+                print(f"\n[Content]: {full_msg['content']}")
                 
-            if 'tool_calls' in msg and msg['tool_calls']:
-                # Streaming tool calls need to be handled carefully. 
-                # We extend the list and will de-duplicate later.
-                full_message['tool_calls'].extend(msg['tool_calls'])
-
-        print("\n")
-        messages.append(full_message)
-        
-        if full_message['tool_calls']:
-            # De-duplicate tool calls by func name and args (crude but effective for local streams)
-            unique_calls = []
-            seen_calls = set()
-            for t in full_message['tool_calls']:
-                call_sig = f"{t['function']['name']}:{json.dumps(t['function']['arguments'], sort_keys=True)}"
-                if call_sig not in seen_calls:
-                    unique_calls.append(t)
-                    seen_calls.add(call_sig)
-            
-            for tool in unique_calls:
+            if not full_msg.get('tool_calls'):
+                # Final response reached
+                break
+                
+            # Process tool calls
+            for tool in full_msg['tool_calls']:
                 name = tool['function']['name']
                 args = tool['function']['arguments']
                 print(f"--- Executing: {name}({args}) ---")
@@ -218,26 +212,22 @@ def run_chat(prompt: str, model: str):
                 if name in available_functions:
                     try:
                         result = available_functions[name](**args)
-                    except Exception as e:
-                        result = f"Error: {str(e)}"
-                    
-                    sanitized_result = str(result).replace('<', '&lt;').replace('>', '&gt;')
-                    
-                    messages.append({
-                        'role': 'tool',
-                        'content': sanitized_result,
-                        'name': name
-                    })
+                        # Sanitize XML-like chars that break Ollama's parser
+                        res_str = str(result).replace('<', '&lt;').replace('>', '&gt;')
+                        messages.append({'role': 'tool', 'content': res_str, 'name': name})
+                    except Exception as te:
+                        messages.append({'role': 'tool', 'content': f"Error: {str(te)}", 'name': name})
                 else:
-                    messages.append({
-                        'role': 'tool',
-                        'content': f"Error: Tool {name} not found.",
-                        'name': name
-                    })
-        else:
-            # No tool calls, we are finished
-            if not full_message['content'] and not full_message['thinking']:
-                print("(No response content produced)")
+                    messages.append({'role': 'tool', 'content': f"Error: Tool {name} not found.", 'name': name})
+                    
+        except Exception as e:
+            print(f"\n[Error]: {str(e)}")
+            if "XML" in str(e):
+                 print("Attempting direct fallback without tools...")
+                 try:
+                     fallback = ollama.chat(model=model, messages=[{'role': 'user', 'content': prompt}])
+                     print("\n[Fallback]:", fallback['message']['content'])
+                 except: pass
             break
 
     print("\n--- Interaction Complete ---")
