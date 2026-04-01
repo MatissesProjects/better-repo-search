@@ -8,6 +8,20 @@ from typing import Optional, List, Dict, Any
 from dotenv import load_dotenv
 import ollama
 
+# Tree-sitter imports
+try:
+    from tree_sitter import Language, Parser
+    import tree_sitter_python as tspython
+    import tree_sitter_c_sharp as tscsharp
+    
+    LANGUAGES = {
+        'py': Language(tspython.language()),
+        'cs': Language(tscsharp.language())
+    }
+    HAS_TREE_SITTER = True
+except ImportError:
+    HAS_TREE_SITTER = False
+
 # Load environment variables from .env file if it exists
 load_dotenv()
 
@@ -85,6 +99,122 @@ def get_file_symbols(file_path: str) -> str:
         return "\n".join(symbols) if symbols else "No symbols found."
     except Exception as e: return f"Error: {str(e)}"
 
+# --- Tree-sitter Semantic Tools ---
+
+def get_symbol_definition(file_path: str, symbol_name: str) -> str:
+    r"""Uses Tree-sitter to find the exact definition of a symbol (class or function)."""
+    if not HAS_TREE_SITTER: return "Error: Tree-sitter not installed."
+    
+    ext = file_path.split('.')[-1]
+    if ext not in LANGUAGES: return f"Error: Language .{ext} not supported for semantic search."
+    
+    lang = LANGUAGES[ext]
+    parser = Parser(lang)
+    
+    try:
+        with open(file_path, 'rb') as f:
+            source = f.read()
+        tree = parser.parse(source)
+        
+        # Language-specific queries
+        if ext == 'py':
+            query_str = f"""
+            (function_definition name: (identifier) @name (#eq? @name "{symbol_name}"))
+            (class_definition name: (identifier) @name (#eq? @name "{symbol_name}"))
+            """
+        elif ext == 'cs':
+            query_str = f"""
+            (method_declaration name: (identifier) @name (#eq? @name "{symbol_name}"))
+            (class_declaration name: (identifier) @name (#eq? @name "{symbol_name}"))
+            """
+            
+        query = lang.query(query_str)
+        matches = query.matches(tree.root_node)
+        
+        results = []
+        for match in matches:
+            for node, capture_name in match.captures:
+                start_row, _ = node.start_point
+                end_row, _ = node.end_point
+                results.append(f"Found {symbol_name} definition at L{start_row+1}-L{end_row+1}")
+                
+        return "\n".join(results) if results else f"No semantic definition found for '{symbol_name}'."
+    except Exception as e:
+        return f"Error: {str(e)}"
+
+def extract_code_block(file_path: str, symbol_name: str) -> str:
+    r"""Extracts the entire code block for a given symbol using Tree-sitter."""
+    if not HAS_TREE_SITTER: return "Error: Tree-sitter not installed."
+    
+    ext = file_path.split('.')[-1]
+    if ext not in LANGUAGES: return f"Error: Language .{ext} not supported."
+    
+    lang = LANGUAGES[ext]
+    parser = Parser(lang)
+    
+    try:
+        with open(file_path, 'rb') as f:
+            source = f.read()
+        tree = parser.parse(source)
+        
+        if ext == 'py':
+            query_str = f"""
+            (function_definition name: (identifier) @name (#eq? @name "{symbol_name}")) @block
+            (class_definition name: (identifier) @name (#eq? @name "{symbol_name}")) @block
+            """
+        elif ext == 'cs':
+            query_str = f"""
+            (method_declaration name: (identifier) @name (#eq? @name "{symbol_name}")) @block
+            (class_declaration name: (identifier) @name (#eq? @name "{symbol_name}")) @block
+            """
+            
+        query = lang.query(query_str)
+        matches = query.matches(tree.root_node)
+        
+        for match in matches:
+            for node, capture_name in match.captures:
+                if capture_name == 'block':
+                    return source[node.start_byte:node.end_byte].decode('utf8')
+                    
+        return f"No code block found for '{symbol_name}'."
+    except Exception as e:
+        return f"Error: {str(e)}"
+
+def analyze_dependencies(file_path: str) -> str:
+    r"""Parses a file and extracts all import/dependency statements."""
+    if not HAS_TREE_SITTER: return "Error: Tree-sitter not installed."
+    
+    ext = file_path.split('.')[-1]
+    if ext not in LANGUAGES: return f"Error: Language .{ext} not supported."
+    
+    lang = LANGUAGES[ext]
+    parser = Parser(lang)
+    
+    try:
+        with open(file_path, 'rb') as f:
+            source = f.read()
+        tree = parser.parse(source)
+        
+        if ext == 'py':
+            query_str = """
+            (import_statement) @imp
+            (import_from_statement) @imp
+            """
+        elif ext == 'cs':
+            query_str = "(using_directive) @imp"
+            
+        query = lang.query(query_str)
+        matches = query.matches(tree.root_node)
+        
+        results = []
+        for match in matches:
+            for node, capture_name in match.captures:
+                results.append(source[node.start_byte:node.end_byte].decode('utf8').strip())
+                
+        return "\n".join(results) if results else "No explicit dependencies found."
+    except Exception as e:
+        return f"Error: {str(e)}"
+
 # --- Definitions ---
 
 tools = [
@@ -138,7 +268,51 @@ tools = [
         'type': 'function',
         'function': {
             'name': 'get_file_symbols',
-            'description': 'Extract function/class symbols.',
+            'description': 'Extract function/class symbols (basic regex).',
+            'parameters': {
+                'type': 'object',
+                'properties': {
+                    'file_path': {'type': 'string'},
+                },
+                'required': ['file_path'],
+            },
+        },
+    },
+    {
+        'type': 'function',
+        'function': {
+            'name': 'get_symbol_definition',
+            'description': 'Semantic search: find exact declaration of class/method.',
+            'parameters': {
+                'type': 'object',
+                'properties': {
+                    'file_path': {'type': 'string'},
+                    'symbol_name': {'type': 'string'},
+                },
+                'required': ['file_path', 'symbol_name'],
+            },
+        },
+    },
+    {
+        'type': 'function',
+        'function': {
+            'name': 'extract_code_block',
+            'description': 'Semantic search: get the full code body for a symbol.',
+            'parameters': {
+                'type': 'object',
+                'properties': {
+                    'file_path': {'type': 'string'},
+                    'symbol_name': {'type': 'string'},
+                },
+                'required': ['file_path', 'symbol_name'],
+            },
+        },
+    },
+    {
+        'type': 'function',
+        'function': {
+            'name': 'analyze_dependencies',
+            'description': 'Extract all imports/directives from a file.',
             'parameters': {
                 'type': 'object',
                 'properties': {
@@ -155,81 +329,104 @@ available_functions = {
     'read_file': read_file,
     'list_directory_tree': list_directory_tree,
     'get_file_symbols': get_file_symbols,
+    'get_symbol_definition': get_symbol_definition,
+    'extract_code_block': extract_code_block,
+    'analyze_dependencies': analyze_dependencies,
 }
 
 # --- Orchestration ---
 
-def run_chat(prompt: str, model: str):
+def run_chat(prompt: str, model_name: str):
+    client = ollama.Client(timeout=300.0)
+    
     messages = [
-        {'role': 'system', 'content': 'You are a helpful coding assistant. Use tools to explore the codebase. Respond with a final answer after tools are called.'},
+        {'role': 'system', 'content': 'You are an expert software engineer. Explore the codebase using tools. Call tools explicitly.'},
         {'role': 'user', 'content': prompt}
     ]
     
-    print(f"--- Asking Local Model ({model}) ---")
+    print(f"--- Asking Local Model ({model_name}) ---")
     
     max_turns = 10
     for turn in range(max_turns):
-        print(f"\n[Turn {turn+1}] Generating (this can take 30-60s on complex tasks)...", flush=True)
+        print(f"\n[Turn {turn+1}] Generating...", flush=True)
         
         try:
-            # NON-STREAMING for tool turns is more stable in many Ollama configurations
-            response = ollama.chat(
-                model=model, 
+            full_msg = {'role': 'assistant', 'content': '', 'thinking': '', 'tool_calls': []}
+            
+            stream = client.chat(
+                model=model_name, 
                 messages=messages, 
                 tools=tools, 
+                stream=True,
                 options={
                     'num_predict': 4096, 
                     'temperature': 0,
-                    'num_ctx': 8192
+                    'num_ctx': 32768
                 }
             )
             
-            full_msg = response['message']
+            last_chunk_type = None
+            for chunk in stream:
+                m = chunk.get('message', {})
+                
+                if m.get('thinking'):
+                    if last_chunk_type != 'thinking':
+                        print("\n[Thinking]: ", end="", flush=True)
+                    print(m['thinking'], end="", flush=True)
+                    full_msg['thinking'] += m['thinking']
+                    last_chunk_type = 'thinking'
+                
+                if m.get('content'):
+                    if last_chunk_type != 'content':
+                        print("\n[Content]: ", end="", flush=True)
+                    print(m['content'], end="", flush=True)
+                    full_msg['content'] += m['content']
+                    last_chunk_type = 'content'
+                    
+                if m.get('tool_calls'):
+                    # Accumulate unique tool calls
+                    for tc in m['tool_calls']:
+                        if tc not in full_msg['tool_calls']:
+                            full_msg['tool_calls'].append(tc)
+
+            print("\n")
             messages.append(full_msg)
             
-            if full_msg.get('thinking'):
-                print(f"\n[Thinking]: {full_msg['thinking']}")
-            
-            if full_msg.get('content'):
-                print(f"\n[Content]: {full_msg['content']}")
-                
             if not full_msg.get('tool_calls'):
-                # Final response reached
+                if not full_msg.get('content') and not full_msg.get('thinking'):
+                    print("(Empty response from model)")
                 break
                 
-            # Process tool calls
+            # Execute tool calls
             for tool in full_msg['tool_calls']:
                 name = tool['function']['name']
                 args = tool['function']['arguments']
                 print(f"--- Executing: {name}({args}) ---")
                 
-                # Type conversion
+                # Cleanup arg types
                 for k in ['start_line', 'end_line', 'context_lines', 'depth']:
-                    if k in args and isinstance(args[k], (str, float)):
+                    if k in args:
                         try: args[k] = int(args[k])
                         except: pass
                 
                 if name in available_functions:
                     try:
                         result = available_functions[name](**args)
-                        # Sanitize XML-like chars that break Ollama's parser
-                        res_str = str(result).replace('<', '&lt;').replace('>', '&gt;')
-                        messages.append({'role': 'tool', 'content': res_str, 'name': name})
+                        # Sanitize XML characters that can break the Ollama internal parser
+                        sanitized_result = str(result).replace('<', '&lt;').replace('>', '&gt;')
+                        messages.append({'role': 'tool', 'content': sanitized_result, 'name': name})
                     except Exception as te:
                         messages.append({'role': 'tool', 'content': f"Error: {str(te)}", 'name': name})
                 else:
                     messages.append({'role': 'tool', 'content': f"Error: Tool {name} not found.", 'name': name})
                     
-        except Exception as e:
-            print(f"\n[Error]: {str(e)}")
-            if "XML" in str(e):
-                 print("Attempting direct fallback without tools...")
-                 try:
-                     fallback = ollama.chat(model=model, messages=[{'role': 'user', 'content': prompt}])
-                     print("\n[Fallback]:", fallback['message']['content'])
-                 except: pass
+        except ollama.ResponseError as re:
+            print(f"\n[Ollama Error]: {str(re)}")
             break
-
+        except Exception as e:
+            print(f"\n[Unexpected Error]: {str(e)}")
+            break
+    
     print("\n--- Interaction Complete ---")
 
 if __name__ == "__main__":
