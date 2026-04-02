@@ -41,14 +41,14 @@ A powerful, local-first toolbelt that allows Large Language Models (LLMs) to exp
 
 ## Usage
 
-Run the tool by passing your natural language prompt and the target repository path:
+Run the tool by passing your natural language prompt and the target repository path (local or remote):
 
 ```bash
-./venv/Scripts/python search_tool.py "How is the user authentication handled in the backend?" --repo "C:/path/to/your/project" --model qwen3.5:9b
+./venv/Scripts/python search_tool.py "How is the user authentication handled in the backend?" --repo "https://github.com/example/repo" --model qwen3.5:9b
 ```
 
 ### Options
-- `--repo`: The path to the repository you want to analyze (defaults to current directory).
+- `--repo`: The path to the repository you want to analyze. This can be a **local directory** or a **GitHub URL** (HTTPS/SSH). If a URL is provided, the tool clones the repository to a temporary folder and deletes it after the session. (Defaults to current directory).
 - `--model`: The Ollama model tag to use (defaults to `qwen3.5:9b`).
 
 ## Example Workflow

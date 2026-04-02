@@ -4,6 +4,9 @@ import argparse
 import re
 import json
 import sys
+import tempfile
+import shutil
+import stat
 from typing import Optional, List, Dict, Any
 from dotenv import load_dotenv
 import ollama
@@ -38,6 +41,28 @@ except ImportError:
 load_dotenv()
 
 # --- Tools ---
+
+def remove_readonly(func, path, excinfo):
+    """Clear the read-only bit and re-attempt the file removal."""
+    os.chmod(path, stat.S_IWRITE)
+    func(path)
+
+def clone_github_repo(repo_url: str) -> str:
+    """Clones a GitHub repository to a temporary directory and returns the path."""
+    temp_dir = tempfile.mkdtemp(prefix="repo_search_")
+    try:
+        # Using --depth 1 for faster cloning of the latest state
+        subprocess.run(["git", "clone", "--depth", "1", repo_url, temp_dir], check=True, capture_output=True)
+        return temp_dir
+    except subprocess.CalledProcessError as e:
+        if os.path.exists(temp_dir):
+            shutil.rmtree(temp_dir, onerror=remove_readonly)
+        error_msg = e.stderr.decode('utf-8', errors='replace').strip()
+        raise Exception(f"Failed to clone repository: {error_msg}")
+    except Exception as e:
+        if os.path.exists(temp_dir):
+            shutil.rmtree(temp_dir, onerror=remove_readonly)
+        raise e
 
 def search_repository(regex_pattern: str, file_extension: str = "", context_lines: int = 5) -> str:
     r"""Searches the local repository for a specific regex pattern."""
@@ -381,6 +406,22 @@ tools = [
     {
         'type': 'function',
         'function': {
+            'name': 'search_file_content',
+            'description': 'Alias for search_repository. Search for regex pattern in the repository.',
+            'parameters': {
+                'type': 'object',
+                'properties': {
+                    'regex_pattern': {'type': 'string', 'description': 'The regex pattern.'},
+                    'file_extension': {'type': 'string', 'description': 'Optional extension filter.'},
+                    'context_lines': {'type': 'integer', 'description': 'Surrounding lines.'},
+                },
+                'required': ['regex_pattern'],
+            },
+        },
+    },
+    {
+        'type': 'function',
+        'function': {
             'name': 'read_file',
             'description': 'Read content of a specific file.',
             'parameters': {
@@ -485,6 +526,7 @@ tools = [
 
 available_functions = {
     'search_repository': search_repository,
+    'search_file_content': search_repository,
     'read_file': read_file,
     'list_directory_tree': list_directory_tree,
     'get_file_symbols': get_file_symbols,
@@ -672,13 +714,27 @@ if __name__ == "__main__":
     parser.add_argument("-v", "--verbose", action="store_true", help="Show streamed thinking and detailed logs.")
     args = parser.parse_args()
     
-    if args.repo != ".":
-        if os.path.exists(args.repo):
+    original_cwd = os.getcwd()
+    temp_repo_path = None
+    try:
+        if args.repo.startswith(("http://", "https://", "git@")):
             if args.verbose:
-                print(f"--- Changing working directory to: {args.repo} ---")
-            os.chdir(args.repo)
-        else:
-            print(f"Error: Repo path '{args.repo}' does not exist.")
-            sys.exit(1)
-            
-    run_chat(args.prompt, args.model, args.verbose)
+                print(f"--- Cloning repository: {args.repo} ---")
+            temp_repo_path = clone_github_repo(args.repo)
+            os.chdir(temp_repo_path)
+        elif args.repo != ".":
+            if os.path.exists(args.repo):
+                if args.verbose:
+                    print(f"--- Changing working directory to: {args.repo} ---")
+                os.chdir(args.repo)
+            else:
+                print(f"Error: Repo path '{args.repo}' does not exist.")
+                sys.exit(1)
+                
+        run_chat(args.prompt, args.model, args.verbose)
+    finally:
+        os.chdir(original_cwd)
+        if temp_repo_path and os.path.exists(temp_repo_path):
+            if args.verbose:
+                print(f"--- Cleaning up temporary directory: {temp_repo_path} ---")
+            shutil.rmtree(temp_repo_path, onerror=remove_readonly)

@@ -23,11 +23,12 @@ python <PATH_TO_SKILL_DIR>/search_tool.py "<USER_PROMPT>"
 
 #### Arguments:
 - `<USER_PROMPT>`: The natural language instruction describing what you want to find or analyze.
-- `--repo`: (Optional) The absolute path to the repository. Defaults to `.` (current directory).
+- `--repo`: (Optional) The absolute path to the local repository OR a **GitHub URL** (HTTPS or SSH). If a URL is provided, the tool will clone it to a temporary directory for analysis and automatically clean it up afterward. Defaults to `.` (current directory).
 - `-v` or `--verbose`: (Optional) Use this to see the tool's internal "thinking" and step-by-step tool execution. Highly recommended for complex debugging.
 - `--model`: (Optional) Specify a different Ollama model (e.g., `deepseek-r1:8b`).
 
 ### Trigger Examples
+- "Clone `https://github.com/user/repo` and explain how the routing is implemented."
 - "Perform a deep search to find every place where the `CalculateDamage` method is invoked in the C# files."
 - "Explain the dependency relationship between `player.py` and the rest of the `test_repo` folder."
 - "Analyze how the state is managed in the `Game` class across all files."
