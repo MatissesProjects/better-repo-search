@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Claude-Code Companion Selector</title>
+    <style>
+        :root {
+            --bg: #0f172a;
+            --card-bg: #1e293b;
+            --text: #f8fafc;
+            --accent: #38bdf8;
+            --legendary: #f59e0b;
+            --shiny: #fb7185;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 2rem;
+            margin: 0;
+        }
+
+        .container {
+            max-width: 800px;
+            width: 100%;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        h1 {
+            color: var(--accent);
+            margin-bottom: 0.5rem;
+        }
+
+        .card {
+            background-color: var(--card-bg);
+            padding: 2rem;
+            border-radius: 1rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+            margin-bottom: 2rem;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        label {
+            font-weight: 600;
+            font-size: 0.9rem;
+            color: #94a3b8;
+        }
+
+        select, input {
+            background-color: var(--bg);
+            border: 1px solid #334155;
+            color: white;
+            padding: 0.75rem;
+            border-radius: 0.5rem;
+            font-size: 1rem;
+        }
+
+        button {
+            grid-column: span 2;
+            background-color: var(--accent);
+            color: var(--bg);
+            border: none;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            font-weight: 700;
+            font-size: 1.1rem;
+            cursor: pointer;
+            transition: opacity 0.2s;
+            margin-top: 1rem;
+        }
+
+        button:hover {
+            opacity: 0.9;
+        }
+
+        .result-card {
+            display: none;
+            background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+            border: 2px solid var(--accent);
+            padding: 2rem;
+            border-radius: 1rem;
+            text-align: center;
+            animation: fadeIn 0.5s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .id-badge {
+            font-family: monospace;
+            font-size: 2.5rem;
+            color: var(--accent);
+            margin: 1rem 0;
+            letter-spacing: 2px;
+        }
+
+        .stat-line {
+            font-size: 1.2rem;
+            margin: 0.5rem 0;
+        }
+
+        .legendary-text { color: var(--legendary); font-weight: bold; }
+        .shiny-text { color: var(--shiny); font-weight: bold; text-shadow: 0 0 10px var(--shiny); }
+
+        .instructions {
+            margin-top: 2rem;
+            font-size: 0.85rem;
+            color: #94a3b8;
+            text-align: left;
+            background: #000;
+            padding: 1rem;
+            border-radius: 0.5rem;
+        }
+
+        code {
+            color: var(--accent);
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <h1>Companion "God Roll" Finder</h1>
+        <p>Find the exact User ID for your perfect Claude-Code buddy.</p>
+    </header>
+
+    <div class="card">
+        <div class="grid">
+            <div class="form-group">
+                <label>Desired Rarity</label>
+                <select id="rarity">
+                    <option value="legendary">Legendary (1%)</option>
+                    <option value="epic">Epic (4%)</option>
+                    <option value="rare">Rare (10%)</option>
+                    <option value="uncommon">Uncommon (25%)</option>
+                    <option value="common">Common (60%)</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Shiny Status</label>
+                <select id="shiny">
+                    <option value="true">Shiny ✨ (1%)</option>
+                    <option value="false">Normal</option>
+                    <option value="any">Any</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Species</label>
+                <select id="species">
+                    <option value="any">Any</option>
+                    <option value="duck">Duck</option>
+                    <option value="dragon">Dragon</option>
+                    <option value="ghost">Ghost</option>
+                    <option value="cat">Cat</option>
+                    <option value="robot">Robot</option>
+                    <option value="axolotl">Axolotl</option>
+                    <option value="capybara">Capybara</option>
+                    <option value="mushroom">Mushroom</option>
+                    <option value="chonk">Chonk</option>
+                    <option value="goose">Goose</option>
+                    <option value="blob">Blob</option>
+                    <option value="octopus">Octopus</option>
+                    <option value="owl">Owl</option>
+                    <option value="penguin">Penguin</option>
+                    <option value="turtle">Turtle</option>
+                    <option value="snail">Snail</option>
+                    <option value="cactus">Cactus</option>
+                    <option value="rabbit">Rabbit</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Hat</label>
+                <select id="hat">
+                    <option value="any">Any</option>
+                    <option value="crown">Crown</option>
+                    <option value="tophat">Tophat</option>
+                    <option value="propeller">Propeller</option>
+                    <option value="halo">Halo</option>
+                    <option value="wizard">Wizard</option>
+                    <option value="beanie">Beanie</option>
+                    <option value="tinyduck">Tiny Duck</option>
+                    <option value="none">None</option>
+                </select>
+            </div>
+            <button onclick="findCompanion()">Search for Matches</button>
+        </div>
+    </div>
+
+    <div id="result" class="result-card">
+        <div id="result-meta" class="stat-line"></div>
+        <div class="id-badge" id="result-id"></div>
+        <p>Adopt this buddy by setting your <code>userID</code></p>
+        
+        <div class="instructions">
+            <strong>Adoption Instructions:</strong><br>
+            1. Open <code>~/.anthropic/config.json</code><br>
+            2. Set <code>"userID": "<span id="code-id"></span>"</code><br>
+            3. Restart Claude-Code to see your new companion!
+        </div>
+    </div>
+</div>
+
+<script>
+    const SALT = 'friend-2026-401';
+    const RARITIES = ['common', 'uncommon', 'rare', 'epic', 'legendary'];
+    const RARITY_WEIGHTS = { common: 60, uncommon: 25, rare: 10, epic: 4, legendary: 1 };
+    const SPECIES = ['duck', 'goose', 'blob', 'cat', 'dragon', 'octopus', 'owl', 'penguin', 'turtle', 'snail', 'ghost', 'axolotl', 'capybara', 'cactus', 'robot', 'rabbit', 'mushroom', 'chonk'];
+    const EYES = ['·', '✦', '×', '◉', '@', '°'];
+    const HATS = ['none', 'crown', 'tophat', 'propeller', 'halo', 'wizard', 'beanie', 'tinyduck'];
+
+    function mulberry32(seed) {
+        let a = seed >>> 0;
+        return function () {
+            a |= 0; a = (a + 0x6d2b79f5) | 0;
+            let t = Math.imul(a ^ (a >>> 15), 1 | a);
+            t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+            return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+        };
+    }
+
+    function hashString(s) {
+        let h = 2166136261;
+        for (let i = 0; i < s.length; i++) {
+            h ^= s.charCodeAt(i);
+            h = Math.imul(h, 16777619);
+        }
+        return h >>> 0;
+    }
+
+    function roll(userId) {
+        const rng = mulberry32(hashString(userId + SALT));
+        
+        // Rarity
+        const total = 100;
+        let rv = rng() * total;
+        let rarity = 'common';
+        for (const r of RARITIES) {
+            rv -= RARITY_WEIGHTS[r];
+            if (rv < 0) { rarity = r; break; }
+        }
+
+        const species = SPECIES[Math.floor(rng() * SPECIES.length)];
+        const eye = EYES[Math.floor(rng() * EYES.length)];
+        const hat = rarity === 'common' ? 'none' : HATS[Math.floor(rng() * HATS.length)];
+        const shiny = rng() < 0.01;
+
+        return { rarity, species, hat, eye, shiny };
+    }
+
+    function generateRandomId(length = 6) {
+        const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+        let result = '';
+        for (let i = 0; i < length; i++) {
+            result += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        return result;
+    }
+
+    function findCompanion() {
+        const targetRarity = document.getElementById('rarity').value;
+        const targetShiny = document.getElementById('shiny').value;
+        const targetSpecies = document.getElementById('species').value;
+        const targetHat = document.getElementById('hat').value;
+
+        const resultDiv = document.getElementById('result');
+        const btn = document.querySelector('button');
+        btn.innerText = "Searching... (0)";
+        btn.disabled = true;
+
+        let attempts = 0;
+        const maxAttempts = 5000000; // High limit to ensure we find a match
+        
+        const searchBatch = () => {
+            for(let j = 0; j < 5000; j++, attempts++) {
+                const currentId = generateRandomId();
+                const res = roll(currentId);
+                
+                const matchRarity = res.rarity === targetRarity;
+                const matchShiny = targetShiny === 'any' || (res.shiny.toString() === targetShiny);
+                const matchSpecies = targetSpecies === 'any' || (res.species === targetSpecies);
+                const matchHat = targetHat === 'any' || (res.hat === targetHat);
+
+                if (matchRarity && matchShiny && matchSpecies && matchHat) {
+                    displayResult(currentId, res);
+                    btn.innerText = "Search for Matches";
+                    btn.disabled = false;
+                    return;
+                }
+            }
+
+            if (attempts < maxAttempts) {
+                btn.innerText = `Searching... (${attempts.toLocaleString()} IDs checked)`;
+                setTimeout(searchBatch, 0);
+            } else {
+                alert("No match found after 5,000,000 attempts. Try a broader search (e.g. set Hat to 'Any').");
+                btn.innerText = "Search for Matches";
+                btn.disabled = false;
+            }
+        };
+        
+        searchBatch();
+    }
+
+    function displayResult(id, res) {
+        const resultDiv = document.getElementById('result');
+        const metaDiv = document.getElementById('result-meta');
+        const idDiv = document.getElementById('result-id');
+        const codeId = document.getElementById('code-id');
+
+        resultDiv.style.display = 'block';
+        idDiv.innerText = id;
+        codeId.innerText = id;
+
+        let meta = `<span class="${res.rarity}-text">${res.rarity.toUpperCase()}</span>`;
+        if (res.shiny) meta += ` <span class="shiny-text">SHINY ✨</span>`;
+        meta += ` ${res.species.toUpperCase()}`;
+        if (res.hat !== 'none') meta += ` with a ${res.hat.toUpperCase()}`;
+        
+        metaDiv.innerHTML = meta;
+        resultDiv.scrollIntoView({ behavior: 'smooth' });
+    }
+</script>
+
+</body>
+</html>
