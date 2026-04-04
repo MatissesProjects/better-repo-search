@@ -564,6 +564,7 @@ available_functions = {
 class CallHistory:
     def __init__(self):
         self.history = set()
+        self.msg_history = []
 
     def is_duplicate(self, name, args):
         # Create a stable string representation of the call
@@ -572,6 +573,22 @@ class CallHistory:
             return True
         self.history.add(call_str)
         return False
+    
+    def is_stagnant(self, assistant_msg):
+        # Check if we've seen this exact assistant message structure before
+        # We normalize by excluding thinking if we want to be more strict, 
+        # but usually local models loop on content/tool_calls.
+        sig = {
+            'content': assistant_msg.get('content'),
+            'tool_calls': assistant_msg.get('tool_calls')
+        }
+        sig_str = json.dumps(sig, sort_keys=True)
+        
+        count = self.msg_history.count(sig_str)
+        self.msg_history.append(sig_str)
+        
+        # If we see the same result twice (count=1), we warn. If 3 times (count=2), we break.
+        return count >= 2
 
 # --- Orchestration ---
 
@@ -669,6 +686,12 @@ def run_chat(prompt: str, model_name: str, verbose: bool = False, max_turns: int
                 print("\n")
             messages.append(full_msg)
             
+            # Check for stagnation (repeating the same content/tool calls)
+            if call_history.is_stagnant(full_msg):
+                if verbose:
+                    print("--- Detected stagnation (repeated assistant message). Breaking loop. ---")
+                break
+
             if not full_msg.get('tool_calls'):
                 if not full_msg.get('content') and not full_msg.get('thinking'):
                     if verbose:
