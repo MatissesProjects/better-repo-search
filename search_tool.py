@@ -13,7 +13,7 @@ import ollama
 
 # Tree-sitter imports
 try:
-    from tree_sitter import Language, Parser
+    from tree_sitter import Language, Parser, Query, QueryCursor
     import tree_sitter_python as tspython
     import tree_sitter_c_sharp as tscsharp
     import tree_sitter_javascript as tsjavascript
@@ -177,42 +177,50 @@ def get_symbol_definition(file_path: str, symbol_name: str) -> str:
             """
         elif ext == 'cs':
             query_str = f"""
-            (method_declaration name: (identifier) @name (#eq? @name "{symbol_name}"))
-            (class_declaration name: (identifier) @name (#eq? @name "{symbol_name}"))
+            (method_declaration (identifier) @name (#eq? @name "{symbol_name}"))
+            (class_declaration (identifier) @name (#eq? @name "{symbol_name}"))
             """
-        elif ext in ['js', 'ts', 'tsx']:
+        elif ext == 'js':
             query_str = f"""
-            (function_declaration name: (identifier) @name (#eq? @name "{symbol_name}"))
-            (class_declaration name: (identifier) @name (#eq? @name "{symbol_name}"))
-            (method_definition name: (property_identifier) @name (#eq? @name "{symbol_name}"))
-            (variable_declarator name: (identifier) @name (#eq? @name "{symbol_name}"))
+            (function_declaration (identifier) @name (#eq? @name "{symbol_name}"))
+            (class_declaration (identifier) @name (#eq? @name "{symbol_name}"))
+            (method_definition (property_identifier) @name (#eq? @name "{symbol_name}"))
+            (variable_declarator (identifier) @name (#eq? @name "{symbol_name}"))
+            """
+        elif ext in ['ts', 'tsx']:
+            query_str = f"""
+            (function_declaration (identifier) @name (#eq? @name "{symbol_name}"))
+            (class_declaration (type_identifier) @name (#eq? @name "{symbol_name}"))
+            (method_definition (property_identifier) @name (#eq? @name "{symbol_name}"))
+            (variable_declarator (identifier) @name (#eq? @name "{symbol_name}"))
+            (interface_declaration (type_identifier) @name (#eq? @name "{symbol_name}"))
             """
         elif ext == 'html':
             query_str = f"""
-            (start_tag name: (tag_name) @name (#eq? @name "{symbol_name}"))
+            (start_tag (tag_name) @name (#eq? @name "{symbol_name}"))
             """
         elif ext == 'java':
             query_str = f"""
-            (method_declaration name: (identifier) @name (#eq? @name "{symbol_name}"))
-            (class_declaration name: (identifier) @name (#eq? @name "{symbol_name}"))
-            (interface_declaration name: (identifier) @name (#eq? @name "{symbol_name}"))
+            (method_declaration (identifier) @name (#eq? @name "{symbol_name}"))
+            (class_declaration (identifier) @name (#eq? @name "{symbol_name}"))
+            (interface_declaration (identifier) @name (#eq? @name "{symbol_name}"))
             """
         elif ext in ['kt', 'kts']:
             query_str = f"""
-            (function_declaration identifier: (simple_identifier) @name (#eq? @name "{symbol_name}"))
-            (class_declaration identifier: (simple_identifier) @name (#eq? @name "{symbol_name}"))
-            (object_declaration identifier: (simple_identifier) @name (#eq? @name "{symbol_name}"))
+            (function_declaration (identifier) @name (#eq? @name "{symbol_name}"))
+            (class_declaration (identifier) @name (#eq? @name "{symbol_name}"))
+            (object_declaration (identifier) @name (#eq? @name "{symbol_name}"))
             """
             
-        query = lang.query(query_str)
-        matches = query.matches(tree.root_node)
+        query = Query(lang, query_str)
+        cursor = QueryCursor(query)
+        captures = cursor.captures(tree.root_node)
         
         results = []
-        for match in matches:
-            for node, capture_name in match.captures:
-                start_row, _ = node.start_point
-                end_row, _ = node.end_point
-                results.append(f"Found {symbol_name} definition at L{start_row+1}-L{end_row+1}")
+        for node in captures.get('name', []):
+            start_row, _ = node.start_point
+            end_row, _ = node.end_point
+            results.append(f"Found {symbol_name} definition at L{start_row+1}-L{end_row+1}")
                 
         return "\n".join(results) if results else f"No semantic definition found for '{symbol_name}'."
     except Exception as e:
@@ -240,40 +248,53 @@ def extract_code_block(file_path: str, symbol_name: str) -> str:
             """
         elif ext == 'cs':
             query_str = f"""
-            (method_declaration name: (identifier) @name (#eq? @name "{symbol_name}")) @block
-            (class_declaration name: (identifier) @name (#eq? @name "{symbol_name}")) @block
+            (method_declaration (identifier) @name (#eq? @name "{symbol_name}")) @block
+            (class_declaration (identifier) @name (#eq? @name "{symbol_name}")) @block
             """
-        elif ext in ['js', 'ts', 'tsx']:
+        elif ext == 'js':
             query_str = f"""
-            (function_declaration name: (identifier) @name (#eq? @name "{symbol_name}")) @block
-            (class_declaration name: (identifier) @name (#eq? @name "{symbol_name}")) @block
-            (method_definition name: (property_identifier) @name (#eq? @name "{symbol_name}")) @block
-            (variable_declarator name: (identifier) @name (#eq? @name "{symbol_name}")) @block
+            (function_declaration (identifier) @name (#eq? @name "{symbol_name}")) @block
+            (class_declaration (identifier) @name (#eq? @name "{symbol_name}")) @block
+            (method_definition (property_identifier) @name (#eq? @name "{symbol_name}")) @block
+            (variable_declarator (identifier) @name (#eq? @name "{symbol_name}")) @block
+            """
+        elif ext in ['ts', 'tsx']:
+            query_str = f"""
+            (function_declaration (identifier) @name (#eq? @name "{symbol_name}")) @block
+            (class_declaration (type_identifier) @name (#eq? @name "{symbol_name}")) @block
+            (method_definition (property_identifier) @name (#eq? @name "{symbol_name}")) @block
+            (variable_declarator (identifier) @name (#eq? @name "{symbol_name}")) @block
+            (interface_declaration (type_identifier) @name (#eq? @name "{symbol_name}")) @block
             """
         elif ext == 'html':
             query_str = f"""
-            (element (start_tag name: (tag_name) @name (#eq? @name "{symbol_name}"))) @block
+            (element (start_tag (tag_name) @name (#eq? @name "{symbol_name}"))) @block
+            (script_element (start_tag (tag_name) @name (#eq? @name "{symbol_name}"))) @block
+            (style_element (start_tag (tag_name) @name (#eq? @name "{symbol_name}"))) @block
             """
         elif ext == 'java':
             query_str = f"""
-            (method_declaration name: (identifier) @name (#eq? @name "{symbol_name}")) @block
-            (class_declaration name: (identifier) @name (#eq? @name "{symbol_name}")) @block
-            (interface_declaration name: (identifier) @name (#eq? @name "{symbol_name}")) @block
+            (method_declaration (identifier) @name (#eq? @name "{symbol_name}")) @block
+            (class_declaration (identifier) @name (#eq? @name "{symbol_name}")) @block
+            (interface_declaration (identifier) @name (#eq? @name "{symbol_name}")) @block
             """
         elif ext in ['kt', 'kts']:
             query_str = f"""
-            (function_declaration identifier: (simple_identifier) @name (#eq? @name "{symbol_name}")) @block
-            (class_declaration identifier: (simple_identifier) @name (#eq? @name "{symbol_name}")) @block
-            (object_declaration identifier: (simple_identifier) @name (#eq? @name "{symbol_name}")) @block
+            (function_declaration (identifier) @name (#eq? @name "{symbol_name}")) @block
+            (class_declaration (identifier) @name (#eq? @name "{symbol_name}")) @block
+            (object_declaration (identifier) @name (#eq? @name "{symbol_name}")) @block
             """
             
-        query = lang.query(query_str)
-        matches = query.matches(tree.root_node)
+        query = Query(lang, query_str)
+        cursor = QueryCursor(query)
+        captures = cursor.captures(tree.root_node)
         
-        for match in matches:
-            for node, capture_name in match.captures:
-                if capture_name == 'block':
-                    return source[node.start_byte:node.end_byte].decode('utf8')
+        if 'block' in captures:
+            node = captures['block'][0]
+            # If the capture is just the name, we want its parent (the whole declaration)
+            if node.type in ['identifier', 'type_identifier', 'property_identifier', 'tag_name']:
+                node = node.parent
+            return source[node.start_byte:node.end_byte].decode('utf8')
                     
         return f"No code block found for '{symbol_name}'."
     except Exception as e:
@@ -309,21 +330,23 @@ def analyze_dependencies(file_path: str) -> str:
             """
         elif ext == 'html':
             query_str = """
-            (element (start_tag name: (tag_name) @name (#eq? @name "script"))) @imp
-            (element (start_tag name: (tag_name) @name (#eq? @name "link"))) @imp
+            (element (start_tag (tag_name) @name (#eq? @name "script"))) @imp
+            (element (start_tag (tag_name) @name (#eq? @name "link"))) @imp
+            (script_element) @imp
+            (style_element) @imp
             """
         elif ext == 'java':
             query_str = "(import_declaration) @imp"
         elif ext in ['kt', 'kts']:
             query_str = "(import_header) @imp"
             
-        query = lang.query(query_str)
-        matches = query.matches(tree.root_node)
+        query = Query(lang, query_str)
+        cursor = QueryCursor(query)
+        captures = cursor.captures(tree.root_node)
         
         results = []
-        for match in matches:
-            for node, capture_name in match.captures:
-                results.append(source[node.start_byte:node.end_byte].decode('utf8').strip())
+        for node in captures.get('imp', []):
+            results.append(source[node.start_byte:node.end_byte].decode('utf8').strip())
                 
         return "\n".join(results) if results else "No explicit dependencies found."
     except Exception as e:
@@ -351,8 +374,8 @@ def get_symbol_references(file_path: str, symbol_name: str) -> str:
             """
         elif ext == 'cs':
             query_str = f"""
-            (invocation_expression function: (identifier) @name (#eq? @name "{symbol_name}"))
-            (invocation_expression function: (member_access_expression name: (identifier) @name (#eq? @name "{symbol_name}")))
+            (invocation_expression (identifier) @name (#eq? @name "{symbol_name}"))
+            (invocation_expression (member_access_expression (identifier) @name (#eq? @name "{symbol_name}")))
             """
         elif ext in ['js', 'ts', 'tsx']:
             query_str = f"""
@@ -361,28 +384,30 @@ def get_symbol_references(file_path: str, symbol_name: str) -> str:
             """
         elif ext == 'java':
             query_str = f"""
-            (method_invocation name: (identifier) @name (#eq? @name "{symbol_name}"))
+            (method_invocation (identifier) @name (#eq? @name "{symbol_name}"))
             """
         elif ext in ['kt', 'kts']:
             query_str = f"""
-            (call_expression navigation_suffix: (navigation_suffix (simple_identifier) @name (#eq? @name "{symbol_name}")))
-            (call_expression (simple_identifier) @name (#eq? @name "{symbol_name}"))
+            (call_expression (identifier) @name (#eq? @name "{symbol_name}"))
+            (call_expression (navigation_expression (identifier) @name (#eq? @name "{symbol_name}")))
             """
         else:
             return f"Error: get_symbol_references not fully implemented for {ext} yet."
             
-        query = lang.query(query_str)
-        matches = query.matches(tree.root_node)
+        query = Query(lang, query_str)
+        cursor = QueryCursor(query)
+        captures = cursor.captures(tree.root_node)
         
         results = []
-        for match in matches:
-            for node, capture_name in match.captures:
-                start_row, _ = node.start_point
-                results.append(f"Found {symbol_name} reference at L{start_row+1}")
+        for node in captures.get('name', []):
+            start_row, _ = node.start_point
+            results.append(f"Found {symbol_name} reference at L{start_row+1}")
                 
         return "\n".join(results) if results else f"No semantic references found for '{symbol_name}' in this file."
     except Exception as e:
         return f"Error: {str(e)}"
+
+
 
 # --- Definitions ---
 
