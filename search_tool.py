@@ -584,7 +584,7 @@ def check_ollama():
     except Exception:
         return False
 
-def run_chat(prompt: str, model_name: str, verbose: bool = False):
+def run_chat(prompt: str, model_name: str, verbose: bool = False, max_turns: int = 15):
     if not check_ollama():
         print("\n[Error]: Ollama service is not running or unreachable.")
         print("Please ensure Ollama is installed and running (e.g., run 'ollama serve' or check the tray icon).")
@@ -623,10 +623,9 @@ def run_chat(prompt: str, model_name: str, verbose: bool = False):
     if verbose:
         print(f"--- Asking Local Model ({model_name}) ---")
     
-    max_turns = 15
     for turn in range(max_turns):
         if verbose:
-            print(f"\n[Turn {turn+1}] Generating...", flush=True)
+            print(f"\n[Turn {turn+1}/{max_turns}] Generating...", flush=True)
         
         try:
             full_msg = {'role': 'assistant', 'content': '', 'thinking': '', 'tool_calls': []}
@@ -737,8 +736,20 @@ if __name__ == "__main__":
     parser.add_argument("--model", default="qwen3.5:9b", help="The Ollama model to use.")
     parser.add_argument("--repo", default=".", help="The path to the repository to search (default: current directory).")
     parser.add_argument("-v", "--verbose", action="store_true", help="Show streamed thinking and detailed logs.")
+    parser.add_argument("--attempts", default="low", help="Number of turns: 'low' (15), 'medium' (25), 'high' (35), or a custom number.")
     args = parser.parse_args()
     
+    # Resolve attempts
+    max_turns = 15
+    if args.attempts == "low": max_turns = 15
+    elif args.attempts == "medium": max_turns = 25
+    elif args.attempts == "high": max_turns = 35
+    else:
+        try: max_turns = int(args.attempts)
+        except ValueError:
+            print(f"Invalid value for --attempts: '{args.attempts}'. Defaulting to 'low' (15).")
+            max_turns = 15
+
     original_cwd = os.getcwd()
     temp_repo_path = None
     try:
@@ -756,7 +767,7 @@ if __name__ == "__main__":
                 print(f"Error: Repo path '{args.repo}' does not exist.")
                 sys.exit(1)
                 
-        run_chat(args.prompt, args.model, args.verbose)
+        run_chat(args.prompt, args.model, args.verbose, max_turns=max_turns)
     finally:
         os.chdir(original_cwd)
         if temp_repo_path and os.path.exists(temp_repo_path):
