@@ -629,6 +629,7 @@ def run_chat(prompt: str, model_name: str, verbose: bool = False, max_turns: int
         "3. Use semantic tools ('get_symbol_definition', 'extract_code_block') for precise symbol analysis—they are better than regex because they ignore comments and strings.\n"
         "4. Always 'read_file' or 'extract_code_block' before making conclusions about logic.\n"
         "5. Be concise but thorough in your final answer.\n"
+        "6. If you are approaching your maximum number of turns, provide a summary of what you have found so far.\n"
         "IMPORTANT: Do not repeat the same tool call with the same arguments if it failed or returned nothing."
     )
 
@@ -640,6 +641,7 @@ def run_chat(prompt: str, model_name: str, verbose: bool = False, max_turns: int
     if verbose:
         print(f"--- Asking Local Model ({model_name}) ---")
     
+    reached_limit = True
     for turn in range(max_turns):
         if verbose:
             print(f"\n[Turn {turn+1}/{max_turns}] Generating...", flush=True)
@@ -695,12 +697,14 @@ def run_chat(prompt: str, model_name: str, verbose: bool = False, max_turns: int
             if call_history.is_stagnant(full_msg):
                 if verbose:
                     print("--- Detected stagnation (repeated assistant message). Breaking loop. ---")
+                reached_limit = False
                 break
 
             if not full_msg.get('tool_calls'):
                 if not full_msg.get('content') and not full_msg.get('thinking'):
                     if verbose:
                         print("(Empty response from model)")
+                reached_limit = False
                 break
                 
             # Execute tool calls
@@ -733,8 +737,13 @@ def run_chat(prompt: str, model_name: str, verbose: bool = False, max_turns: int
                         result = available_functions[name](**args)
                         # Print a snippet of the result
                         if verbose:
-                            res_preview = str(result)[:200] + "..." if len(str(result)) > 200 else str(result)
-                            print(f"--- Result Snippet: {res_preview}")
+                            # Print more context in verbose mode
+                            res_str = str(result)
+                            if len(res_str) > 2000:
+                                res_preview = res_str[:2000] + "... [TRUNCATED IN LOGS]"
+                            else:
+                                res_preview = res_str
+                            print(f"--- Result:\n{res_preview}\n---")
                         
                         # Sanitize XML characters that can break the Ollama internal parser
                         sanitized_result = str(result).replace('<', '&lt;').replace('>', '&gt;')
@@ -750,11 +759,30 @@ def run_chat(prompt: str, model_name: str, verbose: bool = False, max_turns: int
                     
         except ollama.ResponseError as re:
             print(f"\n[Ollama Error]: {str(re)}")
+            reached_limit = False
             break
         except Exception as e:
             print(f"\n[Unexpected Error]: {str(e)}")
+            reached_limit = False
             break
     
+    if reached_limit:
+        print("\n--- [Notice]: Maximum number of turns reached. Requesting final summary of findings. ---")
+        messages.append({
+            'role': 'user', 
+            'content': "You have reached the maximum number of allowed turns for this session. Please provide a comprehensive final summary of everything you have discovered so far, including where key information can be found."
+        })
+        try:
+            response = client.chat(
+                model=model_name, 
+                messages=messages,
+                options={'num_predict': 2048, 'temperature': 0}
+            )
+            print("\n--- Final Summary of Findings ---")
+            print(response['message']['content'])
+        except Exception as e:
+            print(f"Failed to generate final summary: {str(e)}")
+
     if verbose:
         print("\n--- Interaction Complete ---")
 
