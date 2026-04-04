@@ -39,6 +39,27 @@ A powerful, local-first toolbelt that allows Large Language Models (LLMs) to exp
    ollama pull qwen3.5:9b  # or qwen2.5-coder:7b
    ```
 
+## Verification and Testing
+
+The repository includes a `test_repo/` directory containing sample code in all supported languages:
+- **Python** (`player.py`, `main.py`)
+- **C#** (`player.cs`, `game.cs`)
+- **JavaScript** (`sample.js`)
+- **TypeScript** (`sample.ts`)
+- **HTML** (`sample.html`)
+- **Java** (`GameSession.java`)
+- **Kotlin** (`Warrior.kt`)
+
+### Running Verification
+You can use `verify_tools.py` to check basic functionality:
+```bash
+./venv/Scripts/python verify_tools.py
+```
+For deep semantic verification, you can run prompts against the `test_repo`:
+```bash
+./venv/Scripts/python search_tool.py "Explain the health system in the C# and Python files in test_repo" --repo "test_repo"
+```
+
 ## Usage
 
 Run the tool by passing your natural language prompt and the target repository path (local or remote):
