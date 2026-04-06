@@ -154,9 +154,95 @@ def list_directory_tree(path: str = ".", depth: int = 2) -> str:
     return "\n".join(output)
 
 def get_file_symbols(file_path: str) -> str:
-    r"""Extracts symbols from a file using basic regex."""
+    r"""Extracts symbols from a file using Tree-sitter (preferred) or basic regex (fallback)."""
     try:
         if not os.path.exists(file_path): return "Error: File not found"
+        
+        ext = file_path.split('.')[-1]
+        
+        # Try Tree-sitter first
+        if HAS_TREE_SITTER and ext in LANGUAGES:
+            lang = LANGUAGES[ext]
+            parser = Parser(lang)
+            with open(file_path, 'rb') as f:
+                source = f.read()
+            tree = parser.parse(source)
+            
+            query_str = ""
+            if ext == 'py':
+                query_str = """
+                (function_definition name: (identifier) @name) @symbol
+                (class_definition name: (identifier) @name) @symbol
+                """
+            elif ext == 'cs':
+                query_str = """
+                (method_declaration name: (identifier) @name) @symbol
+                (class_declaration name: (identifier) @name) @symbol
+                (interface_declaration name: (identifier) @name) @symbol
+                (struct_declaration name: (identifier) @name) @symbol
+                (enum_declaration name: (identifier) @name) @symbol
+                """
+            elif ext in ['js', 'ts', 'tsx']:
+                query_str = """
+                (function_declaration name: (identifier) @name) @symbol
+                (class_declaration name: (identifier) @name) @symbol
+                (method_definition name: (property_identifier) @name) @symbol
+                (variable_declarator name: (identifier) @name) @symbol
+                (interface_declaration name: (identifier) @name) @symbol
+                """
+                if ext in ['ts', 'tsx']:
+                    query_str += "(type_alias_declaration name: (type_identifier) @name) @symbol"
+            elif ext == 'java':
+                query_str = """
+                (method_declaration name: (identifier) @name) @symbol
+                (class_declaration name: (identifier) @name) @symbol
+                (interface_declaration name: (identifier) @name) @symbol
+                (enum_declaration name: (identifier) @name) @symbol
+                """
+            elif ext in ['kt', 'kts']:
+                query_str = """
+                (function_declaration name: (identifier) @name) @symbol
+                (class_declaration name: (identifier) @name) @symbol
+                (object_declaration name: (identifier) @name) @symbol
+                (property_declaration (variable_declaration name: (identifier) @name)) @symbol
+                """
+            elif ext == 'html':
+                query_str = """
+                (start_tag (tag_name) @name) @symbol
+                (erroneous_end_tag (tag_name) @name) @symbol
+                """
+            
+            if query_str:
+                query = Query(lang, query_str)
+                cursor = QueryCursor(query)
+                captures = cursor.captures(tree.root_node)
+                
+                results = []
+                seen = set()
+                # Use captures.get('name', []) to get nodes tagged as @name
+                for node in captures.get('name', []):
+                    name = source[node.start_byte:node.end_byte].decode('utf8')
+                    start_row, _ = node.start_point
+                    
+                    # Determine type from parent
+                    # For variable_declarator, we want the type to be "Variable" etc.
+                    stype = node.parent.type.replace('_', ' ').title()
+                    if node.parent.type == 'method_definition' and node.type == 'property_identifier':
+                        stype = "Method"
+                    elif node.parent.type == 'function_definition':
+                        stype = "Function"
+                    elif node.parent.type == 'class_definition':
+                        stype = "Class"
+                    
+                    entry = f"L{start_row+1}: [{stype}] {name}"
+                    if entry not in seen:
+                        results.append(entry)
+                        seen.add(entry)
+                
+                if results:
+                    return "\n".join(results)
+
+        # Fallback to regex if Tree-sitter fails or language not supported
         with open(file_path, 'r', encoding='utf-8', errors='replace') as f:
             content = f.read()
         symbols = []
