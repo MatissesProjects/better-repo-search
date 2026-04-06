@@ -724,6 +724,9 @@ def run_chat(prompt: str, model_name: str, verbose: bool = False, max_turns: int
                 print("\n")
             messages.append(full_msg)
             
+            if not verbose and full_msg.get('content'):
+                print(f"\n{full_msg['content'].strip()}")
+            
             # Check for stagnation (repeating the same content/tool calls)
             if call_history.is_stagnant(full_msg):
                 if verbose:
@@ -735,8 +738,6 @@ def run_chat(prompt: str, model_name: str, verbose: bool = False, max_turns: int
                 if not full_msg.get('content') and not full_msg.get('thinking'):
                     if verbose:
                         print("(Empty response from model)")
-                if not verbose and full_msg.get('content'):
-                    print(full_msg['content'])
                 reached_limit = False
                 break
                 
@@ -758,6 +759,11 @@ def run_chat(prompt: str, model_name: str, verbose: bool = False, max_turns: int
 
                 if verbose:
                     print(f"--- Executing: {name}({args}) ---")
+                else:
+                    # Concise call summary
+                    arg_str = str(args)
+                    if len(arg_str) > 80: arg_str = arg_str[:77] + "..."
+                    print(f"[{turn+1}] Executing: {name}({arg_str}) -> ", end="", flush=True)
                 
                 # Cleanup arg types
                 for k in ['start_line', 'end_line', 'context_lines', 'depth']:
@@ -777,6 +783,14 @@ def run_chat(prompt: str, model_name: str, verbose: bool = False, max_turns: int
                             else:
                                 res_preview = res_str
                             print(f"--- Result:\n{res_preview}\n---")
+                        else:
+                            # Concise result summary
+                            res_str = str(result).replace('\n', ' ').strip()
+                            if len(res_str) > 120:
+                                res_preview = res_str[:117] + "..."
+                            else:
+                                res_preview = res_str
+                            print(res_preview)
                         
                         # Sanitize XML characters that can break the Ollama internal parser
                         sanitized_result = str(result).replace('<', '&lt;').replace('>', '&gt;')
@@ -784,10 +798,14 @@ def run_chat(prompt: str, model_name: str, verbose: bool = False, max_turns: int
                     except Exception as te:
                         if verbose:
                             print(f"--- Error: {str(te)}")
+                        else:
+                            print(f"Error: {str(te)}")
                         messages.append({'role': 'tool', 'content': f"Error: {str(te)}", 'name': name})
                 else:
                     if verbose:
                         print(f"--- Error: Tool {name} not found.")
+                    else:
+                        print(f"Error: Tool {name} not found.")
                     messages.append({'role': 'tool', 'content': f"Error: Tool {name} not found.", 'name': name})
                     
         except ollama.ResponseError as re:
