@@ -24,6 +24,7 @@ A powerful, local-first toolbelt that allows Large Language Models (LLMs) to exp
 4. **`extract_code_block`**: Pull the entire implementation of a specific function or class.
 5. **`analyze_dependencies`**: Trace imports and directives to understand file relationships.
 6. **`list_directory_tree`**: Give the LLM a mental map of your project structure.
+7. **`analyze_test_coverage`**: Cross-reference symbols with test files to find coverage gaps.
 
 ## Setup
 
@@ -71,6 +72,10 @@ Run the tool by passing your natural language prompt and the target repository p
 ### Options
 - `--repo`: The path to the repository you want to analyze. This can be a **local directory** or a **GitHub URL** (HTTPS/SSH). If a URL is provided, the tool clones the repository to a temporary folder and deletes it after the session. (Defaults to current directory).
 - `--model`: The Ollama model tag to use (defaults to `gemma4:e4b`).
+- `--host`: The Ollama host URL (e.g., `http://127.0.0.1:11434`). Defaults to the `OLLAMA_HOST` environment variable.
+- `--test-coverage`: Flag to automatically run a test coverage analysis and provide findings to the model as initial context.
+- `--attempts`: Set the max number of interactive turns: `low` (15), `medium` (25), `high` (35), or a custom number.
+- `-v`, `--verbose`: Show the model's internal thinking and detailed tool execution logs.
 
 ## Example Workflow
 

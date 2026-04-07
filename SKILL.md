@@ -11,6 +11,7 @@ This skill provides a high-powered, local-first alternative to standard regex se
 - **Complex Inquiries**: "How does the authentication flow work?", "Where is the player's health actually modified?", "Explain the dependency graph of the UI module."
 - **Privacy-First**: This tool runs entirely on your local machine using Ollama.
 - **Architectural Mapping**: Use it to understand the relationship between different files and modules.
+- **Test Coverage Analysis**: Identify untested functions or classes in your codebase automatically.
 
 ### Usage Instructions
 To trigger this skill, use your shell execution tool to run the `search_tool.py` script. 
@@ -26,6 +27,9 @@ python <PATH_TO_SKILL_DIR>/search_tool.py "<USER_PROMPT>"
 - `--repo`: (Optional) The absolute path to the local repository OR a **GitHub URL** (HTTPS or SSH). If a URL is provided, the tool will clone it to a temporary directory for analysis and automatically clean it up afterward. Defaults to `.` (current directory).
 - `-v` or `--verbose`: (Optional) Use this to see the tool's internal "thinking" and step-by-step tool execution. Highly recommended for complex debugging.
 - `--model`: (Optional) Specify a different Ollama model (e.g., `deepseek-r1:8b`).
+- `--host`: (Optional) The Ollama host URL (e.g., `http://192.168.1.10:11434`). Defaults to the `OLLAMA_HOST` environment variable.
+- `--test-coverage`: (Optional) Automatically run a test coverage analysis and provide the findings as initial context to the model.
+- `--attempts`: (Optional) Number of interactive turns allowed: `low` (15), `medium` (25), `high` (35), or a custom integer.
 
 ### Trigger Examples
 - "Clone `https://github.com/user/repo` and explain how the routing is implemented."
@@ -33,3 +37,4 @@ python <PATH_TO_SKILL_DIR>/search_tool.py "<USER_PROMPT>"
 - "Explain the dependency relationship between `player.py` and the rest of the `test_repo` folder."
 - "Analyze how the state is managed in the `Game` class across all files."
 - "Use your semantic search to find the definition of `User` and all its references."
+- "What is the test coverage like for the core logic? Use --test-coverage."

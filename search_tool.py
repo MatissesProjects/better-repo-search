@@ -474,6 +474,72 @@ def analyze_dependencies(file_path: str) -> str:
     except Exception as e:
         return f"Error: {str(e)}"
 
+def analyze_test_coverage(root_path: str = ".") -> str:
+    r"""Analyzes the repository to find functions/classes that lack corresponding tests."""
+    test_file_patterns = [r"test_.*\.py", r".*_test\.py", r".*Test\.java", r".*Tests\.java", r".*Spec\.ts", r".*spec\.ts", r".*\.test\.js", r".*\.test\.ts"]
+    
+    source_files = []
+    test_files = []
+    
+    # Identify source and test files
+    for root, _, files in os.walk(root_path):
+        if any(ignored in root for ignored in [".git", "__pycache__", "venv", "node_modules", "obj", "bin"]):
+            continue
+        for file in files:
+            full_path = os.path.join(root, file)
+            is_test = any(re.match(pattern, file) for pattern in test_file_patterns)
+            if is_test:
+                test_files.append(full_path)
+            elif file.split('.')[-1] in LANGUAGES:
+                source_files.append(full_path)
+
+    if not test_files:
+        return "No test files found to analyze coverage against."
+
+    # Load all test file contents for searching
+    test_contents = ""
+    for tf in test_files:
+        try:
+            with open(tf, 'r', encoding='utf-8', errors='replace') as f:
+                test_contents += f.read() + "\n"
+        except: pass
+
+    coverage_report = []
+    total_symbols = 0
+    untested_symbols = 0
+
+    for sf in source_files:
+        symbols_str = get_file_symbols(sf)
+        if "No symbols found" in symbols_str or "Error" in symbols_str:
+            continue
+            
+        file_untested = []
+        for line in symbols_str.splitlines():
+            # Example line: L10: [Function] my_func
+            match = re.search(r'L\d+: \[(.*?)\] (.*)', line)
+            if match:
+                total_symbols += 1
+                symbol_type = match.group(1)
+                symbol_name = match.group(2)
+                
+                # Basic check: is the symbol name mentioned in any test file?
+                # We use word boundaries to avoid partial matches
+                if not re.search(rf'\b{re.escape(symbol_name)}\b', test_contents):
+                    file_untested.append(f"{symbol_name} ({symbol_type})")
+                    untested_symbols += 1
+        
+        if file_untested:
+            coverage_report.append(f"FILE: {sf}\n  Untested: {', '.join(file_untested)}")
+
+    summary = f"Test Coverage Analysis Summary:\n"
+    summary += f"- Total symbols analyzed: {total_symbols}\n"
+    summary += f"- Potentially untested symbols: {untested_symbols}\n"
+    summary += f"- Estimated coverage: {((total_symbols - untested_symbols) / total_symbols * 100):.1f}%" if total_symbols > 0 else ""
+    
+    if coverage_report:
+        return summary + "\n\nDetailed Gaps:\n" + "\n".join(coverage_report)
+    return summary + "\n\nNo major gaps found (all identified symbols are referenced in test files)."
+
 def get_symbol_references(file_path: str, symbol_name: str) -> str:
     r"""Uses Tree-sitter to find all references (call sites) of a symbol."""
     if not HAS_TREE_SITTER: return "Error: Tree-sitter not installed."
@@ -669,6 +735,19 @@ tools = [
             },
         },
     },
+    {
+        'type': 'function',
+        'function': {
+            'name': 'analyze_test_coverage',
+            'description': 'Analyze the repository to find functions/classes that lack corresponding tests.',
+            'parameters': {
+                'type': 'object',
+                'properties': {
+                    'root_path': {'type': 'string', 'description': 'The root path to analyze (defaults to current directory).'},
+                },
+            },
+        },
+    },
 ]
 
 available_functions = {
@@ -681,6 +760,7 @@ available_functions = {
     'get_symbol_references': get_symbol_references,
     'extract_code_block': extract_code_block,
     'analyze_dependencies': analyze_dependencies,
+    'analyze_test_coverage': analyze_test_coverage,
 }
 
 class CallHistory:
@@ -723,7 +803,7 @@ def check_ollama(host: Optional[str] = None):
     except Exception:
         return False
 
-def run_chat(prompt: str, model_name: str, verbose: bool = False, max_turns: int = 15, host: Optional[str] = None):
+def run_chat(prompt: str, model_name: str, verbose: bool = False, max_turns: int = 15, host: Optional[str] = None, test_coverage: bool = False):
     if not check_ollama(host=host):
         print("\n[Error]: Ollama service is not running or unreachable.")
         print(f"Host: {host if host else 'Default'}")
@@ -756,6 +836,10 @@ def run_chat(prompt: str, model_name: str, verbose: bool = False, max_turns: int
         "6. If you are approaching your maximum number of turns, provide a summary of what you have found so far.\n"
         "IMPORTANT: Do not repeat the same tool call with the same arguments if it failed or returned nothing."
     )
+    
+    if test_coverage:
+        coverage_data = analyze_test_coverage(".")
+        system_prompt += f"\n\nINITIAL CONTEXT - TEST COVERAGE GAPS:\n{coverage_data}\n"
 
     messages = [
         {'role': 'system', 'content': system_prompt},
@@ -936,6 +1020,7 @@ if __name__ == "__main__":
     parser.add_argument("--model", default="gemma4:e4b", help="The Ollama model to use.")
     parser.add_argument("--repo", default=".", help="The path to the repository to search (default: current directory).")
     parser.add_argument("--host", default=os.getenv("OLLAMA_HOST"), help="Ollama host URL (e.g., http://127.0.0.1:11434).")
+    parser.add_argument("--test-coverage", action="store_true", help="Run test coverage analysis and provide findings to the model.")
     parser.add_argument("-v", "--verbose", action="store_true", help="Show streamed thinking and detailed logs.")
     parser.add_argument("--attempts", default="low", help="Number of turns: 'low' (15), 'medium' (25), 'high' (35), or a custom number.")
     args = parser.parse_args()
@@ -968,7 +1053,7 @@ if __name__ == "__main__":
                 print(f"Error: Repo path '{args.repo}' does not exist.")
                 sys.exit(1)
                 
-        run_chat(args.prompt, args.model, args.verbose, max_turns=max_turns, host=args.host)
+        run_chat(args.prompt, args.model, args.verbose, max_turns=max_turns, host=args.host, test_coverage=args.test_coverage)
     finally:
         os.chdir(original_cwd)
         if temp_repo_path and os.path.exists(temp_repo_path):
