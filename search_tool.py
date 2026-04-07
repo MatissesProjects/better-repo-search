@@ -160,12 +160,19 @@ def read_file(file_path: str, start_line: Optional[int] = None, end_line: Option
 
 def list_directory_tree(path: str = ".", depth: int = 2) -> str:
     r"""Lists project structure."""
+    if not os.path.exists(path):
+        return f"Error: Path '{path}' does not exist. (Current CWD: {os.getcwd()})"
+        
     output = []
     ignored = {'.git', '__pycache__', 'node_modules', 'obj', 'bin', 'venv'}
     def _walk(p, d):
         if d > depth: return
-        try: entries = sorted(os.listdir(p))
-        except: return
+        try: 
+            entries = sorted(os.listdir(p))
+        except Exception as e:
+            output.append(f"{'  ' * d}[Error reading {p}: {str(e)}]")
+            return
+            
         for e in entries:
             if e in ignored: continue
             full = os.path.join(p, e)
@@ -173,7 +180,10 @@ def list_directory_tree(path: str = ".", depth: int = 2) -> str:
                 output.append(f"{'  ' * d}DIR: {e}/")
                 _walk(full, d + 1)
             else: output.append(f"{'  ' * d}FILE: {e}")
+            
     _walk(path, 0)
+    if not output:
+        return f"The directory '{path}' is empty or only contains ignored files."
     return "\n".join(output)
 
 def get_file_symbols(file_path: str) -> str:
@@ -955,8 +965,9 @@ def run_chat(prompt: str, model_name: str, verbose: bool = False, max_turns: int
 
     system_prompt = (
         "You are an elite software engineer agent. Your goal is to provide deep, accurate analysis of the codebase. "
+        f"You are currently at the ROOT of the repository: {os.getcwd()}\n"
         "Use your tools strategically: \n"
-        "1. Start by listing the directory structure if you are unsure of the project layout.\n"
+        "1. Start by listing the directory structure (path='.') if you are unsure of the project layout.\n"
         "2. Use 'search_repository' (regex) for keyword searches.\n"
         "3. Use semantic tools ('get_symbol_definition', 'extract_code_block') for precise symbol analysis.\n"
         "4. Always 'read_file' or 'extract_code_block' before making conclusions about logic.\n"
