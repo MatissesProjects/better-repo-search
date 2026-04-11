@@ -164,7 +164,7 @@ def list_directory_tree(path: str = ".", depth: int = 2) -> str:
         return f"Error: Path '{path}' does not exist. (Current CWD: {os.getcwd()})"
         
     output = []
-    ignored = {'.git', '__pycache__', 'node_modules', 'obj', 'bin', 'venv'}
+    ignored = {'.git', '__pycache__', 'node_modules', 'obj', 'bin', 'venv', '.venv', 'build', 'dist'}
     def _walk(p, d):
         if d > depth: return
         try: 
@@ -185,6 +185,32 @@ def list_directory_tree(path: str = ".", depth: int = 2) -> str:
     if not output:
         return f"The directory '{path}' is empty or only contains ignored files."
     return "\n".join(output)
+
+def find_files(pattern: str, path: str = ".") -> str:
+    r"""Finds files matching a glob-like pattern (e.g., '*.kt', '**/Test*.java')."""
+    import fnmatch
+    matches = []
+    ignored = {'.git', '__pycache__', 'node_modules', 'obj', 'bin', 'venv', '.venv', 'build', 'dist'}
+    
+    # Simple check if pattern is just an extension
+    if pattern.startswith('.') and '*' not in pattern:
+        pattern = f"*{pattern}"
+
+    for root, dirs, files in os.walk(path):
+        # Remove ignored directories from search
+        dirs[:] = [d for d in dirs if d not in ignored]
+        
+        for filename in fnmatch.filter(files, pattern):
+            matches.append(os.path.join(root, filename))
+            
+    if not matches:
+        return f"No files found matching pattern: '{pattern}'"
+    
+    # Sort and truncate if too many
+    matches.sort()
+    if len(matches) > 100:
+        return "\n".join(matches[:100]) + f"\n... and {len(matches) - 100} more matches."
+    return "\n".join(matches)
 
 def get_file_symbols(file_path: str) -> str:
     r"""Extracts symbols from a file using Tree-sitter (preferred) or basic regex (fallback)."""
@@ -231,13 +257,6 @@ def get_file_symbols(file_path: str) -> str:
                 (class_declaration name: (identifier) @name) @symbol
                 (interface_declaration name: (identifier) @name) @symbol
                 (enum_declaration name: (identifier) @name) @symbol
-                """
-            elif ext in ['kt', 'kts']:
-                query_str = """
-                (function_declaration name: (identifier) @name) @symbol
-                (class_declaration name: (identifier) @name) @symbol
-                (object_declaration name: (identifier) @name) @symbol
-                (property_declaration (variable_declaration name: (identifier) @name)) @symbol
                 """
             elif ext == 'html':
                 query_str = """
@@ -600,7 +619,15 @@ def analyze_dependencies(file_path: str) -> str:
 
 def analyze_test_coverage(root_path: str = ".") -> str:
     r"""Analyzes the repository to find functions/classes that lack corresponding tests."""
-    test_file_patterns = [r"test_.*\.py", r".*_test\.py", r".*Test\.java", r".*Tests\.java", r".*Spec\.ts", r".*spec\.ts", r".*\.test\.js", r".*\.test\.ts"]
+    test_file_patterns = [
+        r"test_.*\.py", r".*_test\.py", 
+        r".*Test\.java", r".*Tests\.java", 
+        r".*Test\.kt", r".*Tests\.kt",
+        r".*Test\.cs", r".*Tests\.cs",
+        r".*Spec\.ts", r".*spec\.ts", 
+        r".*Spec\.tsx", r".*spec\.tsx",
+        r".*\.test\.js", r".*\.test\.ts", r".*\.test\.tsx"
+    ]
     
     source_files = []
     test_files = []
@@ -790,6 +817,21 @@ tools = [
     {
         'type': 'function',
         'function': {
+            'name': 'find_files',
+            'description': 'Finds files matching a glob-like pattern (e.g., "*.kt", "**/Test*.java"). Efficient for locating files without searching content.',
+            'parameters': {
+                'type': 'object',
+                'properties': {
+                    'pattern': {'type': 'string', 'description': 'The glob pattern or file extension to search for.'},
+                    'path': {'type': 'string', 'description': 'The directory to start searching from (defaults to current directory).'},
+                },
+                'required': ['pattern'],
+            },
+        },
+    },
+    {
+        'type': 'function',
+        'function': {
             'name': 'list_directory_tree',
             'description': 'List directory structure.',
             'parameters': {
@@ -894,6 +936,7 @@ available_functions = {
     'search_file_content': search_repository,
     'read_file': read_file,
     'list_directory_tree': list_directory_tree,
+    'find_files': find_files,
     'get_file_symbols': get_file_symbols,
     'get_symbol_definition': get_symbol_definition,
     'get_symbol_references': get_symbol_references,
@@ -967,13 +1010,14 @@ def run_chat(prompt: str, model_name: str, verbose: bool = False, max_turns: int
         "You are an elite software engineer agent. Your goal is to provide deep, accurate analysis of the codebase. "
         f"You are currently at the ROOT of the repository: {os.getcwd()}\n"
         "Use your tools strategically: \n"
-        "1. Start by listing the directory structure (path='.') if you are unsure of the project layout.\n"
-        "2. Use 'search_repository' (regex) for keyword searches.\n"
-        "3. Use semantic tools ('get_symbol_definition', 'extract_code_block') for precise symbol analysis.\n"
-        "4. Always 'read_file' or 'extract_code_block' before making conclusions about logic.\n"
-        "5. Be concise. If you are suggesting changes, ONLY provide the suggested diffs in a standard diff format. "
+        "1. Start by listing the directory structure (path='.') or using 'find_files' to locate relevant files if you are unsure of the project layout.\n"
+        "2. Use 'search_repository' (regex) for keyword searches across the codebase.\n"
+        "3. Use 'find_files' with patterns (e.g., '*.kt', '**/Test*') to quickly locate files by name.\n"
+        "4. Use semantic tools ('get_symbol_definition', 'extract_code_block') for precise symbol analysis once files are located.\n"
+        "5. Always 'read_file' or 'extract_code_block' before making conclusions about logic.\n"
+        "6. Be concise. If you are suggesting changes, ONLY provide the suggested diffs in a standard diff format. "
         "Do not output full code blocks of existing files unless explicitly asked for the full content.\n"
-        "6. If you are approaching your maximum number of turns, provide a summary of what you have found so far.\n"
+        "7. If you are approaching your maximum number of turns, provide a summary of what you have found so far.\n"
         "IMPORTANT: Do not repeat the same tool call with the same arguments if it failed or returned nothing."
     )
     
