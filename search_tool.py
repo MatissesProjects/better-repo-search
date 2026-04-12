@@ -1006,6 +1006,9 @@ def run_chat(prompt: str, model_name: str, verbose: bool = False, max_turns: int
     except Exception:
         pass
 
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    venv_python = os.path.join(script_dir, "venv", "Scripts", "python.exe") if os.name == "nt" else os.path.join(script_dir, "venv", "bin", "python")
+    
     system_prompt = (
         "You are an elite software engineer agent. Your goal is to provide deep, accurate analysis of the codebase. "
         f"You are currently at the ROOT of the repository: {os.getcwd()}\n"
@@ -1018,7 +1021,7 @@ def run_chat(prompt: str, model_name: str, verbose: bool = False, max_turns: int
         "6. Be concise. If you are suggesting changes, ONLY provide the suggested diffs in a standard diff format. "
         "Do not output full code blocks of existing files unless explicitly asked for the full content.\n"
         "7. If you are approaching your maximum number of turns, provide a summary of what you have found so far.\n"
-        "8. If you suggest running this tool (search_tool.py) or other scripts in the repository via a shell, ALWAYS suggest using the local virtual environment's Python interpreter for reliability: `.\\venv\\Scripts\\python.exe` (on Windows) or `./venv/bin/python` (on Linux/macOS).\n"
+        f"8. If you suggest running this tool (search_tool.py) or other scripts in the repository via a shell, ALWAYS suggest using the local virtual environment's Python interpreter for reliability: `{venv_python}` (or similar absolute path to the correct venv).\n"
         "9. BE PROACTIVE. Do not ask for permission or more context if the user's request allows for any investigative action. If a request is broad, pick a logical starting point (like the main entry point or a core module) and begin your analysis. Your first turn should almost always involve a tool call.\n"
         "IMPORTANT: Do not repeat the same tool call with the same arguments if it failed or returned nothing."
     )

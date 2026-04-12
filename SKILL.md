@@ -20,9 +20,9 @@ To trigger this skill, use your shell execution tool to run the `search_tool.py`
 
 **Recommended Interpreter**: Always use the tool's own virtual environment to ensure all dependencies (like Tree-sitter) are available:
 ```powershell
-.\venv\Scripts\python.exe <PATH_TO_SKILL_DIR>\search_tool.py "<USER_PROMPT>"
+<PATH_TO_SKILL_DIR>\venv\Scripts\python.exe <PATH_TO_SKILL_DIR>\search_tool.py "<USER_PROMPT>"
 ```
-(On Linux/macOS, use `./venv/bin/python`)
+(On Linux/macOS, use `<PATH_TO_SKILL_DIR>/venv/bin/python <PATH_TO_SKILL_DIR>/search_tool.py "<USER_PROMPT>"`)
 
 #### Arguments:
 - `<USER_PROMPT>`: The natural language instruction describing what you want to find or analyze.
