@@ -18,9 +18,11 @@ To trigger this skill, use your shell execution tool to run the `search_tool.py`
 
 **Note**: You must have [Ollama](https://ollama.com/) installed and running locally. The default model is `gemma4:e4b`.
 
-```bash
-python <PATH_TO_SKILL_DIR>/search_tool.py "<USER_PROMPT>"
+**Recommended Interpreter**: Always use the tool's own virtual environment to ensure all dependencies (like Tree-sitter) are available:
+```powershell
+.\venv\Scripts\python.exe <PATH_TO_SKILL_DIR>\search_tool.py "<USER_PROMPT>"
 ```
+(On Linux/macOS, use `./venv/bin/python`)
 
 #### Arguments:
 - `<USER_PROMPT>`: The natural language instruction describing what you want to find or analyze.

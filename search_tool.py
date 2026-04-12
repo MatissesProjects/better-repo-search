@@ -1018,6 +1018,8 @@ def run_chat(prompt: str, model_name: str, verbose: bool = False, max_turns: int
         "6. Be concise. If you are suggesting changes, ONLY provide the suggested diffs in a standard diff format. "
         "Do not output full code blocks of existing files unless explicitly asked for the full content.\n"
         "7. If you are approaching your maximum number of turns, provide a summary of what you have found so far.\n"
+        "8. If you suggest running this tool (search_tool.py) or other scripts in the repository via a shell, ALWAYS suggest using the local virtual environment's Python interpreter for reliability: `.\\venv\\Scripts\\python.exe` (on Windows) or `./venv/bin/python` (on Linux/macOS).\n"
+        "9. BE PROACTIVE. Do not ask for permission or more context if the user's request allows for any investigative action. If a request is broad, pick a logical starting point (like the main entry point or a core module) and begin your analysis. Your first turn should almost always involve a tool call.\n"
         "IMPORTANT: Do not repeat the same tool call with the same arguments if it failed or returned nothing."
     )
     
