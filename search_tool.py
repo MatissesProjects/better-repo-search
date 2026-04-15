@@ -992,7 +992,8 @@ def run_chat(prompt: str, model_name: str, verbose: bool = False, max_turns: int
         print("Please ensure Ollama is installed and running (e.g., run 'ollama serve' or check the tray icon).")
         return
 
-    client = ollama.Client(host=host, timeout=300.0)
+    # Increased timeout to 1200s (20 minutes) to handle slow local generation/large models
+    client = ollama.Client(host=host, timeout=1200.0)
     call_history = CallHistory()
     
     # Check if model exists
@@ -1059,6 +1060,8 @@ def run_chat(prompt: str, model_name: str, verbose: bool = False, max_turns: int
     
     if verbose:
         print(f"--- Asking Local Model ({model_name}) ---")
+    else:
+        print(f"--- Searching with {model_name} (local) ---")
     
     reached_limit = True
     for turn in range(max_turns):
@@ -1081,6 +1084,7 @@ def run_chat(prompt: str, model_name: str, verbose: bool = False, max_turns: int
             )
             
             last_chunk_type = None
+            thinking_heartbeat = 0
             for chunk in stream:
                 m = chunk.get('message', {})
                 
@@ -1089,6 +1093,13 @@ def run_chat(prompt: str, model_name: str, verbose: bool = False, max_turns: int
                         if last_chunk_type != 'thinking':
                             print("\n[Thinking]: ", end="", flush=True)
                         print(m['thinking'], end="", flush=True)
+                    else:
+                        # Heartbeat for long thinking phases to prevent Gemini CLI timeout
+                        thinking_heartbeat += len(m['thinking'])
+                        if thinking_heartbeat > 500:
+                            print(".", end="", flush=True)
+                            thinking_heartbeat = 0
+                            
                     full_msg['thinking'] += m['thinking']
                     last_chunk_type = 'thinking'
                 
@@ -1097,6 +1108,12 @@ def run_chat(prompt: str, model_name: str, verbose: bool = False, max_turns: int
                         if last_chunk_type != 'content':
                             print("\n[Content]: ", end="", flush=True)
                         print(m['content'], end="", flush=True)
+                    else:
+                        # Stream content even if not verbose to provide output regularily
+                        if last_chunk_type == 'thinking':
+                            print("\n", end="", flush=True)
+                        print(m['content'], end="", flush=True)
+                        
                     full_msg['content'] += m['content']
                     last_chunk_type = 'content'
                     
@@ -1110,10 +1127,10 @@ def run_chat(prompt: str, model_name: str, verbose: bool = False, max_turns: int
 
             if verbose:
                 print("\n")
+            elif last_chunk_type in ['thinking', 'content']:
+                 print("\n", flush=True)
+                 
             messages.append(full_msg)
-            
-            if not verbose and full_msg.get('content'):
-                print(f"\n{full_msg['content'].strip()}")
             
             # Check for stagnation (repeating the same content/tool calls)
             if call_history.is_stagnant(full_msg):
